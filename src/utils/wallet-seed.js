@@ -46,13 +46,13 @@ let unlockedMnemonicAndSeed = (async () => {
   const unlockedExpiration = localStorage.getItem('unlockedExpiration');
   // Left here to clean up stored mnemonics from previous method
   if (unlockedExpiration && Number(unlockedExpiration) < Date.now()) {
-    localStorage.removeItem('unlocked');
+    sessionStorage.removeItem('unlocked');
     localStorage.removeItem('unlockedExpiration');
   }
   const stored = JSON.parse(
     (await getExtensionUnlockedMnemonic()) ||
     sessionStorage.getItem('unlocked') ||
-      localStorage.getItem('unlocked') ||
+      // localStorage.getItem('unlocked') ||
       'null',
   );
   if (stored === null) {
@@ -109,6 +109,14 @@ function setUnlockedMnemonicAndSeed(
   walletSeedChanged.emit('change', data);
 }
 
+/**
+ * If password is given, store locked (encrypted) wallet info in LocalStorage 
+ * If no password is given, store plaintext wallet info in sessionStorage 
+ * @param {*} mnemonic 
+ * @param {*} seed 
+ * @param {*} password 
+ * @param {*} derivationPath 
+ */
 export async function storeMnemonicAndSeed(
   mnemonic,
   seed,
@@ -135,12 +143,12 @@ export async function storeMnemonicAndSeed(
         digest,
       }),
     );
-    localStorage.removeItem('unlocked');
+    // localStorage.removeItem('unlocked');
     sessionStorage.removeItem('unlocked');
   } else {
-    localStorage.setItem('unlocked', plaintext);
+    sessionStorage.setItem('unlocked', plaintext);
     localStorage.removeItem('locked');
-    sessionStorage.removeItem('unlocked');
+    // sessionStorage.removeItem('unlocked');
   }
   const importsEncryptionKey = deriveImportsEncryptionKey(seed);
   setUnlockedMnemonicAndSeed(
@@ -205,6 +213,13 @@ async function deriveEncryptionKey(password, salt, iterations, digest) {
 
 export function lockWallet() {
   setUnlockedMnemonicAndSeed(null, null, null, null);
+  if (isExtension) {
+    chrome.runtime.sendMessage({
+      channel: 'sollet_extension_mnemonic_channel',
+      method: 'set',
+      data: '',
+    });
+  } 
 }
 
 // Returns the 32 byte key used to encrypt imported private keys.
@@ -224,7 +239,7 @@ export function forgetWallet() {
   };
   walletSeedChanged.emit('change', unlockedMnemonicAndSeed);
   if (isExtension) {
-    // Must use wrapper function for window.location.reload
+    // Must use wrapper function for window.location.reload - this also clears sessionStorage
     chrome.storage.local.clear(() => window.location.reload());
   } else {
     window.location.reload();
